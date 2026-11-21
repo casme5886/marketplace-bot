@@ -1,0 +1,27 @@
+name = "marketplace-orders-bot"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+
+# Har daqiqada — Durable Object'ni uyg'otib turish (asosiy tekshiruvlar uning ichida har 10 soniyada)
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+TIMEZONE_OFFSET_HOURS = "5"
+REMIND_BEFORE_HOURS = "3"
+# WB statistikasidagi narxlar valyutasi (kabinetdagi bilan solishtiring)
+WB_STATS_CURRENCY = "RUB"
+# Uzum: botda ko'rinadigan do'konlar (Rivo shop, Ucare, ONEURI, CASME, Tommy shop)
+UZUM_SHOPS = "132103,136366,138348,131883,40020"
+
+# Botning hamma ma'lumoti shu Durable Object'ning SQLite xotirasida (bepul tarifda ishlaydi)
+[[durable_objects.bindings]]
+name = "BOT"
+class_name = "BotDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["BotDO"]
+
+[observability]
+enabled = true

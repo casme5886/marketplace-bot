@@ -1,0 +1,24 @@
+{
+  "name": "marketplace-orders-bot",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "dev": "wrangler dev --test-scheduled",
+    "deploy": "wrangler deploy",
+    "check": "tsc",
+    "local": "esbuild scripts/local.ts --bundle --platform=node --format=esm --outfile=.local/bot.mjs --log-level=warning && node .local/bot.mjs",
+    "start": "node scripts/run.mjs"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261114.1",
+    "typescript": "^5.6.3",
+    "wrangler": "^4.162.0"
+  },
+  "private": true,
+  "allowScripts": {
+    "esbuild@0.17.19": true,
+    "workerd@1.20241106.1": true
+  }
+}

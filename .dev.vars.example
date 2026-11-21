@@ -1,0 +1,14 @@
+# Lokal sinov uchun (npm run dev). Nusxa oling: .dev.vars
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_WEBHOOK_SECRET=
+ADMIN_LOGIN=
+ADMIN_PASSWORD=
+SETUP_KEY=
+OZON_CLIENT_ID=
+OZON_API_KEY=
+WB_API_TOKEN=
+# Ixtiyoriy: Uzum login/parolni botda «🔐 Uzum'ga ulanish» orqali kiritsangiz, bu yerga yozish shart emas
+UZUM_LOGIN=
+UZUM_PASSWORD=
+# Ixtiyoriy: asosiy admin Telegram ID (telefoningizdagi akkaunt). Telefon yo'qolsa — shu yerga yangisini yozing
+ADMIN_TELEGRAM_ID=

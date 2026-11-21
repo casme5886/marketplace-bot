@@ -1,0 +1,9 @@
+node_modules/
+.wrangler/
+.dev.vars
+.local/
+.local-kv.json
+.git
+*.bat
+*.zip
+_to_delete/
