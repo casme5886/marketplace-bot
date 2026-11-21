@@ -7,3 +7,4 @@ node_modules/
 *.bat
 *.zip
 _to_delete/
+coolify-env.txt

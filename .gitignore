@@ -4,3 +4,4 @@ node_modules/
 .local/
 .local-kv.json
 _to_delete/
+coolify-env.txt
