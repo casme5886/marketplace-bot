@@ -48,7 +48,7 @@ export async function appMarkup(env: Env, markup: any, tab = "", lang: Lang = "u
     const ext = (row as any[]).filter((b) => b.url && !b.callback_data);
     if (ext.length) keep.push(ext);
   }
-  return { inline_keyboard: [[{ text: bt(lang, "openIn"), web_app: { url: tab ? `${url}#${tab}` : url } }], ...keep.slice(0, 3)] };
+  return { inline_keyboard: [[{ text: bt(lang, "openIn"), style: "success", web_app: { url: tab ? `${url}#${tab}` : url } }], ...keep.slice(0, 3)] };
 }
 
 /** Bildirishnoma: botga + tarixga */
