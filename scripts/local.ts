@@ -15,6 +15,7 @@ import { checkWatches } from "../src/uzumui";
 import { checkFbsWatches } from "../src/uzumfbs";
 import { checkStock, checkUzumNewFbs } from "../src/uzumalerts";
 import { checkReminders } from "../src/reminders";
+import { catalogReport } from "../src/stock";
 import { pollClients, subReminders } from "../src/clients";
 import { uzumEnabled } from "../src/uzum";
 import { handleWeb, setMiniAppUrl } from "../src/webapp";
@@ -255,6 +256,15 @@ async function startMiniApp() {
       const headers = new Headers();
       for (const [k, v] of Object.entries(req.headers)) if (typeof v === "string") headers.set(k, v);
       const viaTunnel = !!(req.headers["cf-ray"] || req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"]);
+      // Admin: umumiy ombor uchun katalog hisoboti (?key=SETUP_KEY)
+      if (req.url?.startsWith("/admin/stock-catalog")) {
+        const k = new URL(req.url, "http://x").searchParams.get("key");
+        if (!(env as any).SETUP_KEY || k !== (env as any).SETUP_KEY) { res.writeHead(403); res.end("Forbidden"); return; }
+        const rep = await catalogReport(env as Env);
+        res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(rep));
+        return;
+      }
       const r = await handleWeb(
         viaTunnel ? env : ({ ...env, MINIAPP_DEV_KEY: devKey } as Env),
         new Request(`http://localhost${req.url}`, { method: req.method, headers, body: req.method === "POST" ? Buffer.concat(chunks) : undefined }),
