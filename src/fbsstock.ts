@@ -1,5 +1,5 @@
 import type { Env } from "./types";
-import { uzumAccounts, uzumGet, uzumPost, uzumShops } from "./uzum";
+import { uzumAccounts, uzumGet, uzumShops } from "./uzum";
 
 /**
  * 🏬 Umumiy FBS ombor.
@@ -324,19 +324,43 @@ async function pushWb(env: Env, conf: Conf, items: Push[]): Promise<Map<string, 
   return res;
 }
 
+/**
+ * Uzum'ga FBS qoldiq yozish — Uzum Seller OpenAPI orqali.
+ * Kabinetdagi API kalit(lar) Coolify'da UZUM_API_TOKEN ga yoziladi (bir nechta bo'lsa — vergul bilan).
+ */
 async function pushUzum(env: Env, items: Push[]): Promise<Map<string, string | null>> {
   const res = new Map<string, string | null>();
-  const byAcc = new Map<string, Push[]>();
-  for (const i of items) byAcc.set(i.l.ref.acc, [...(byAcc.get(i.l.ref.acc) ?? []), i]);
-  for (const [acc, list] of byAcc) {
-    try {
-      await uzumPost(env, acc, "/seller-openapi/v2/fbs/sku/stocks", {
-        skuAmountList: list.map((x) => ({ skuId: x.l.ref.skuId, skuTitle: x.l.ref.skuTitle, productTitle: x.l.ref.productTitle, barcode: x.l.ref.barcode, amount: x.qty, fbsLinked: true, dbsLinked: false })),
-      });
-      for (const p of list) res.set(p.l.k, null);
-    } catch (e) {
-      for (const p of list) res.set(p.l.k, (e as Error).message);
+  if (!items.length) return res;
+  const tokens = String((env as any).UZUM_API_TOKEN ?? "").split(/[,\s]+/).filter(Boolean);
+  if (!tokens.length) {
+    for (const i of items) res.set(i.l.k, "Uzum API kaliti kiritilmagan (UZUM_API_TOKEN)");
+    return res;
+  }
+  const byShop = new Map<number, Push[]>();
+  for (const i of items) byShop.set(i.l.ref.shopId, [...(byShop.get(i.l.ref.shopId) ?? []), i]);
+  for (const [, list] of byShop) {
+    let lastErr = "";
+    let done = false;
+    for (const tok of tokens) {
+      try {
+        const r = await fetch("https://api-seller.uzum.uz/api/seller-openapi/v2/fbs/sku/stocks", {
+          method: "POST",
+          headers: { Authorization: tok, "content-type": "application/json", accept: "application/json" },
+          body: JSON.stringify({
+            skuAmountList: list.map((x) => ({ skuId: x.l.ref.skuId, skuTitle: x.l.ref.skuTitle, productTitle: x.l.ref.productTitle, barcode: x.l.ref.barcode, amount: x.qty, fbsLinked: true, dbsLinked: false })),
+          }),
+        });
+        const t = await r.text();
+        if (r.ok) {
+          done = true;
+          break;
+        }
+        lastErr = `Uzum ${r.status}: ${t.slice(0, 150)}`;
+      } catch (e) {
+        lastErr = (e as Error).message;
+      }
     }
+    for (const p of list) res.set(p.l.k, done ? null : lastErr || "Uzum'ga yozilmadi");
   }
   return res;
 }
