@@ -16,7 +16,7 @@ import * as CL from "./clients";
 import { uzumAccounts, uzumFbsConfirm, uzumFbsLabel, uzumGet, uzumInvoice, uzumInvoices, uzumShops, uzumSlots } from "./uzum";
 import { addDaysWatch, reserve, stopSearch, toggleWatchAuto } from "./uzumui";
 import { fbsRoot, fbsWatchStop, fbsWatchToggle, fbsWebCreate, fbsWebDays, fbsWebPoints, fbsWebSlots, fbsWebSplitCreate, fbsWebSplitPlan, fbsWebState, fbsWebWatch, sendFbsLabels, skuLine } from "./uzumfbs";
-import { doAction, makeLabel, pendingOrders } from "./orders";
+import { bulkHandover, doAction, makeLabel, pendingOrders, wbHandoverSupply } from "./orders";
 import { ozonEnabled } from "./ozon";
 import { wbEnabled } from "./wb";
 import { bookings } from "./booklog";
@@ -487,7 +487,8 @@ async function ordersFor(env: Env, v: Viewer, force = false): Promise<Json> {
         cur: o.currency === "UZS" ? "so'm" : o.currency,
         deadline: o.deadline ? new Date(o.deadline).getTime() : null,
         tab,
-        acts: tab === "new" ? ["ship"] : tab === "pack" ? ["label"] : [],
+        supply: o.supply,
+        acts: tab === "new" ? ["ship"] : tab === "pack" ? (o.mp === "wb" && o.supply) || (o.mp === "ozon" && o.readyToHandover) ? ["label", "send"] : ["label"] : [],
       });
     }
   }
@@ -514,6 +515,12 @@ async function orderAct(env: Env, v: Viewer, mp: string, id: string, act: string
   }
   const me = await mpEnv(env, v);
   if (!me) throw new Error("Ozon/WB ulanmagan");
+  if (act === "send") {
+    ordCache.delete(v.uid);
+    if (mp === "ozon") return plain(await bulkHandover(me.env, v.uid, "ozon"));
+    const ids = (data.list as any[]).filter((x) => x.mp === "wb" && x.supply === o.supply).map((x) => String(x.id));
+    return plain(await wbHandoverSupply(me.env, v.uid, String(o.supply), ids));
+  }
   const r = await doAction(me.env, v.uid, mp as "ozon" | "wb", id, act === "ship" ? "ship" : "label");
   return plain(r) + (act === "label" ? " — chatga qarang" : "");
 }

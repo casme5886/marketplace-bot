@@ -46,6 +46,7 @@ export interface Order {
   canShip: boolean; // "Yig'ish" tugmasi mumkinmi
   readyToHandover?: boolean; // yig'ilgan, topshirishga tayyor
   deliveryMethodId?: number; // Ozon: yetkazib berish usuli (jo'natma yaratish uchun)
+  supply?: string; // WB: buyurtma turgan postavka
 }
 
 export interface StoredOrder {

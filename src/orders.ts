@@ -390,6 +390,14 @@ async function markHanded(env: Env, mp: Marketplace, ids: string[], ref: string)
 }
 
 /** Ommaviy: "Yukni jo'natish" — Ozon: tayyor buyurtmalar uchun jo'natma + akt; WB: bugungi postavkani topshirish + QR */
+/** Mini App: WB postavkasini yetkazishga topshirish (kabinetda yaratilgan postavkalar ham) */
+export async function wbHandoverSupply(env: Env, chatId: number, supply: string, ids: string[]): Promise<string> {
+  const r = await wbHandover(env, supply);
+  await markHanded(env, "wb", ids, supply);
+  if (r.qr) await sendDocument(env, chatId, r.qr, `wb-postavka-${supply}.png`, "image/png", `📦 WB postavka QR-kodi № ${supply}`);
+  return `🚚 WB postavka № ${supply} (${ids.length} ta) yetkazishga topshirildi. QR-kod chatga yuborildi — qutiga yopishtirib, punktga olib boring.`;
+}
+
 export async function bulkHandover(env: Env, chatId: number, mp: Marketplace): Promise<string> {
   if (mp === "ozon") {
     const { all } = await pendingOrders(env);

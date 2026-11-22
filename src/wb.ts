@@ -90,7 +90,7 @@ export async function wbActive(env: Env): Promise<Order[]> {
   for (const o of all) {
     const x = st.get(Number(o.id));
     if (!x) continue;
-    if (x.s === "confirm") out.push({ ...toOrder(o), status: "confirm", canShip: false });
+    if (x.s === "confirm") out.push({ ...toOrder(o), status: "confirm", canShip: false, supply: o.supplyId ? String(o.supplyId) : undefined });
     else if (x.s === "complete" && x.w === "waiting") out.push({ ...toOrder(o), status: "handed", canShip: false });
   }
   return out;
