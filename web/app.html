@@ -1,7 +1,8 @@
 <!doctype html>
-<html lang="uz">
+<html lang="uz" data-theme="dark">
 <head>
 <meta charset="utf-8">
+<meta name="color-scheme" content="dark">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>MarketHub</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -98,8 +99,8 @@ nav button em{position:absolute;top:4px;right:calc(50% - 20px);min-width:16px;he
 .seg button.on .tcnt{background:var(--bg)}
 .tcnt.has{background:var(--ink);color:var(--on-ink)}
 .seg button.on .tcnt.has{background:var(--ink)}
-.ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:20;display:flex;align-items:flex-end;justify-content:center}
-.sheet{background:var(--bg);width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:22px 22px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:14px}
+.ov{position:fixed;inset:0;overscroll-behavior:contain;touch-action:none;background:rgba(0,0,0,.45);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--bg);width:100%;max-width:560px;max-height:92vh;overflow:auto;overscroll-behavior:contain;touch-action:pan-y;border-radius:22px 22px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:14px}
 .qrbox{background:#fff;border-radius:16px;padding:14px;display:flex;align-items:center;gap:14px;border:1px solid var(--line);width:100%;text-align:left}
 .qrbox .q{width:116px;height:116px;flex:none;display:flex;align-items:center;justify-content:center}
 .qrbox .q svg,.qrbox .q img{width:116px;height:116px}
@@ -180,10 +181,26 @@ var qrcode=function(){var P=function(x,w){var g=236,l=17,n=x,s=O[w],t=null,r=0,h
   if (TG) {
     TG.ready();
     TG.expand();
-    document.documentElement.setAttribute("data-theme", TG.colorScheme === "dark" ? "dark" : "light");
-    try { TG.setHeaderColor(TG.colorScheme === "dark" ? "#0F1216" : "#F3F4F1"); TG.setBackgroundColor(TG.colorScheme === "dark" ? "#0F1216" : "#F3F4F1"); } catch (e) {}
-    TG.onEvent("themeChanged", function () { document.documentElement.setAttribute("data-theme", TG.colorScheme === "dark" ? "dark" : "light"); });
+    // Ilova o'z rangida — qurilma/Telegram mavzusiga qaramaydi
+    try { TG.setHeaderColor("#0F1216"); TG.setBackgroundColor("#0F1216"); if (TG.setBottomBarColor) TG.setBottomBarColor("#0F1216"); } catch (e) {}
   }
+  document.documentElement.setAttribute("data-theme", "dark");
+  // Oyna (yorliq, ko'rish) ochiq bo'lsa — orqadagi sahifa qimirlamaydi
+  (function () {
+    var y = 0, locked = false, b = document.body;
+    function sync() {
+      var open = !!(document.getElementById("ov") || document.getElementById("fv"));
+      if (open && !locked) {
+        locked = true; y = window.scrollY;
+        b.style.position = "fixed"; b.style.top = -y + "px"; b.style.left = "0"; b.style.right = "0"; b.style.overflow = "hidden";
+      } else if (!open && locked) {
+        locked = false;
+        b.style.position = ""; b.style.top = ""; b.style.left = ""; b.style.right = ""; b.style.overflow = "";
+        window.scrollTo(0, y);
+      }
+    }
+    new MutationObserver(sync).observe(b, { childList: true });
+  })();
 
   var ICON = {
     home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
