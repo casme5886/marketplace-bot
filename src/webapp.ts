@@ -18,6 +18,7 @@ import { addDaysWatch, reserve, stopSearch, toggleWatchAuto } from "./uzumui";
 import { fbsRoot, fbsWatchStop, fbsWatchToggle, fbsWebCreate, fbsWebDays, fbsWebPoints, fbsWebSlots, fbsWebSplitCreate, fbsWebSplitPlan, fbsWebState, fbsWebWatch, sendFbsLabels, skuLine } from "./uzumfbs";
 import { bulkHandover, doAction, makeLabel, pendingOrders, wbHandoverSupply } from "./orders";
 import { ozonEnabled } from "./ozon";
+import { stockApi } from "./stockweb";
 import { wbEnabled } from "./wb";
 import { bookings } from "./booklog";
 import { getStats, periodRange, type PeriodKey } from "./stats";
@@ -871,6 +872,11 @@ export async function handleWeb(env: Env, req: Request): Promise<Response> {
       case "/api/fbs/split":
       case "/api/fbs/split/create":
         return json(await fbsApi(env, v, url.pathname.slice(8), q, body));
+      case "/api/stock":
+      case "/api/stock/cand":
+      case "/api/stock/act":
+        if (!(await isOwner(env, v))) return fail("Faqat admin uchun", 403);
+        return json(await stockApi(env, url.pathname.slice(10), q, body));
       case "/api/admin":
         if (!(await isOwner(env, v))) return fail("Faqat admin uchun", 403);
         return json(await adminData(env));

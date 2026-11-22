@@ -16,6 +16,7 @@ import { checkFbsWatches } from "../src/uzumfbs";
 import { checkStock, checkUzumNewFbs } from "../src/uzumalerts";
 import { checkReminders } from "../src/reminders";
 import { catalogReport } from "../src/stock";
+import { stockSync, testPush } from "../src/fbsstock";
 import { pollClients, subReminders } from "../src/clients";
 import { uzumEnabled } from "../src/uzum";
 import { handleWeb, setMiniAppUrl } from "../src/webapp";
@@ -151,6 +152,21 @@ async function main() {
   };
   setTimeout(stockTick, 20_000);
   setInterval(stockTick, 30 * 60 * 1000);
+  // 🏬 Umumiy FBS ombor — har 3 daqiqada (yoqilgan bo'lsa)
+  let syncBusy = false;
+  setInterval(async () => {
+    if (syncBusy) return;
+    syncBusy = true;
+    try {
+      const r = await stockSync(env);
+      if (r.changed) console.log(`   FBS ombor: ${r.changed} ta mahsulot qoldig'i yangilandi`);
+      if (r.errors.length) console.log("   FBS ombor xato:", r.errors.slice(0, 3).join(" | "));
+    } catch (e) {
+      console.log("FBS ombor xato:", (e as Error).message);
+    } finally {
+      syncBusy = false;
+    }
+  }, 3 * 60 * 1000);
   // 📦 FBO / qaytarish slot kuzatuvlari — har 10 soniyada (joy tez tugaydi)
   let fboBusy = false;
   setInterval(async () => {
@@ -257,6 +273,14 @@ async function startMiniApp() {
       for (const [k, v] of Object.entries(req.headers)) if (typeof v === "string") headers.set(k, v);
       const viaTunnel = !!(req.headers["cf-ray"] || req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"]);
       // Admin: umumiy ombor uchun katalog hisoboti (?key=SETUP_KEY)
+      if (req.url?.startsWith("/admin/stock-test")) {
+        const u = new URL(req.url, "http://x");
+        if (!(env as any).SETUP_KEY || u.searchParams.get("key") !== (env as any).SETUP_KEY) { res.writeHead(403); res.end("Forbidden"); return; }
+        const r = await testPush(env as Env, String(u.searchParams.get("k")));
+        res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(r));
+        return;
+      }
       if (req.url?.startsWith("/admin/stock-catalog")) {
         const k = new URL(req.url, "http://x").searchParams.get("key");
         if (!(env as any).SETUP_KEY || k !== (env as any).SETUP_KEY) { res.writeHead(403); res.end("Forbidden"); return; }

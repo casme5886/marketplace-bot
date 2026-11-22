@@ -373,6 +373,7 @@ var qrcode=function(){var P=function(x,w){var g=236,l=17,n=x,s=O[w],t=null,r=0,h
     if (tab === "admin") loadAdmin();
     if (tab === "ntf") loadNtf();
     if (tab === "stats") loadStats();
+    if (tab === "stock") loadStock();
     if (tab === "tasks") loadWatches();
     if (tab === "orders" || tab === "home") loadOrders(false);
     if (tab === "new" && S.me && S.me.shops.length && !S.nw.shop) pickShop(S.me.shops[0].id);
@@ -386,12 +387,177 @@ var qrcode=function(){var P=function(x,w){var g=236,l=17,n=x,s=O[w],t=null,r=0,h
       '<button type="button" class="cta" data-act="open" data-s="con">Botda ro\'yxatdan o\'tish</button>' +
       '<small class="muted" style="text-align:center">Ozon / WB bilan ishlasangiz — botdagi «Ozon / WB ulash» tugmasi orqali ham ro\'yxatdan o\'tasiz.</small>';
   }
+  /* ---------- 🏬 FBS ombor (umumiy qoldiq) ---------- */
+  S.sk = null; S.skQ = "";
+  var MPL = { uz: "Uzum", oz: "Ozon", wb: "WB" };
+  var MPC = { uz: "#7000FF", oz: "#005BFF", wb: "#CB11AB" };
+  function loadStock(force) {
+    return api("stock" + (force ? "?force=1" : "")).then(function (j) { S.sk = j; render(); }).catch(function (e) { S.sk = { err: e.message }; render(); });
+  }
+  function skAct(body, after) {
+    return api("stock/act", body).then(function (j) { haptic("success"); toast(j.msg); if (after) after(j); return loadStock(); }).catch(function (e) { haptic("error"); toast(e.message); });
+  }
+  function mpBadge(mp, shop) {
+    return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:#fff;background:' + (MPC[mp] || "#555") + ';padding:2px 7px;border-radius:999px;white-space:nowrap">' + esc(MPL[mp] || mp) + (mp === "uz" && shop ? " · " + esc(shop) : "") + "</span>";
+  }
+  function fmtAgo(t) {
+    if (!t) return "hali bo'lmagan";
+    var m = Math.round((Date.now() - t) / 60000);
+    return m < 1 ? "hozirgina" : m < 60 ? m + " daq oldin" : Math.round(m / 60) + " soat oldin";
+  }
+  function vStock() {
+    var h = '<button type="button" class="chip" data-go="home" style="align-self:flex-start">← Asosiy</button>' + header("🏬 FBS ombor", "Bitta qoldiq — Uzum, Ozon va WB'da bir xil");
+    var k = S.sk;
+    if (!k) return h + '<div class="skel"></div><div class="skel"></div>';
+    if (k.err) return h + '<div class="warn">' + esc(k.err) + "</div>";
+    h += '<div class="card col" style="gap:10px"><div class="row" style="justify-content:space-between;gap:10px"><span class="grow"><b>' + (k.conf.on ? "🟢 Sinxronlash yoqilgan" : "⏸ Sinxronlash o'chiq") + '</b><small class="muted" style="display:block">' +
+      (k.conf.on ? "Har 3 daqiqada · oxirgisi: " + fmtAgo(k.conf.lastRun) : "Yoqilmaguncha marketlardagi qoldiq o'zgarmaydi") + "</small></span>" +
+      '<button type="button" class="btn' + (k.conf.on ? "" : " dark") + '" data-sk="toggle" style="min-height:40px">' + (k.conf.on ? "To'xtatish" : "Yoqish") + "</button></div>" +
+      (k.conf.on ? '<button type="button" class="btn" data-sk="sync" style="min-height:40px">🔄 Hozir sinxronlash</button>' : "") +
+      ((k.conf.lastErr || []).length ? '<div class="warn" style="font-size:12px">' + k.conf.lastErr.slice(0, 3).map(esc).join("<br>") + "</div>" : "") + "</div>";
+    if ((k.errs || []).length) h += '<div class="warn" style="font-size:12px">' + k.errs.map(esc).join("<br>") + "</div>";
+    h += '<div class="grid2" style="grid-template-columns:repeat(3,minmax(0,1fr))">' + ["uz", "oz", "wb"].map(function (m) {
+      return '<div class="tile"><b>' + (k.total[m] - k.free[m]) + "/" + k.total[m] + "</b><span>" + MPL[m] + " bog'langan</span></div>";
+    }).join("") + "</div>";
+    if (k.free.uz) h += '<button type="button" class="btn dark" data-sk="bulk">➕ Uzum\'dagi qoldig\'i bor ' + "kartochkalardan mahsulot yaratish</button>";
+    h += '<button type="button" class="btn" data-sk="new">➕ Kartochkadan bitta mahsulot qo\'shish</button>';
+    h += '<input id="skq" class="inp" placeholder="Mahsulot qidirish" value="' + esc(S.skQ) + '" style="width:100%;padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:15px">';
+    var q = S.skQ.trim().toLowerCase();
+    var list = k.items.filter(function (m) { return !q || (m.name + " " + m.links.map(function (l) { return l.code + " " + l.title; }).join(" ")).toLowerCase().indexOf(q) >= 0; });
+    if (!k.items.length) return h + '<div class="empty">Hali mahsulot yo\'q.<br>Yuqoridagi tugma bilan Uzum kartochkalaridan yarating, keyin har biriga Ozon va WB kartochkasini bog\'lang.</div>';
+    h += '<div class="lbl">Mahsulotlar · ' + list.length + "</div>";
+    h += list.slice(0, 150).map(function (m) {
+      var miss = ["uz", "oz", "wb"].filter(function (mp) { return !m.links.some(function (l) { return l.mp === mp; }); });
+      var diff = m.links.some(function (l) { return l.qty != null && l.qty !== m.qty; });
+      return '<div class="card col" style="gap:8px;' + (m.on ? "" : "opacity:.55") + '">' +
+        '<div class="row" style="gap:10px;align-items:flex-start">' + (m.img ? '<img src="' + esc(m.img) + '" alt="" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex:none">' : "") +
+        '<span class="grow" style="min-width:0"><b style="font-size:14px;line-height:1.3;display:block">' + esc(m.name) + "</b>" +
+        (diff && k.conf.on ? '<small style="color:var(--amb)">⏳ marketlarga yozilmoqda</small>' : "") + "</span>" +
+        '<button type="button" data-sk="qty" data-id="' + m.id + '" style="flex:none;min-width:56px;padding:6px 10px;border-radius:12px;border:0;background:' + (m.qty ? "var(--acc-soft)" : "var(--red-soft)") + ";color:" + (m.qty ? "var(--acc-ink)" : "var(--red)") + ';font-weight:800;font-size:20px">' + m.qty + "</button></div>" +
+        '<div class="col" style="gap:5px">' + m.links.map(function (l) {
+          return '<div class="row" style="gap:6px;font-size:12px">' + mpBadge(l.mp, l.shop) + '<span class="grow muted" style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(l.code || l.title) + "</span><b>" + (l.qty == null ? "—" : l.qty) + "</b>" +
+            '<button type="button" data-sk="unlink" data-id="' + m.id + '" data-k="' + esc(l.k) + '" aria-label="Uzish" style="border:0;background:none;color:var(--mute);font-size:16px;padding:0 4px">×</button></div>';
+        }).join("") + "</div>" +
+        '<div class="row" style="gap:6px;flex-wrap:wrap">' +
+        '<button type="button" class="chip" data-sk="add" data-id="' + m.id + '" data-n="-1">−1</button><button type="button" class="chip" data-sk="add" data-id="' + m.id + '" data-n="1">+1</button>' +
+        '<button type="button" class="chip" data-sk="link" data-id="' + m.id + '">🔗 Bog\'lash' + (miss.length ? " (" + miss.map(function (x) { return MPL[x]; }).join(", ") + ")" : "") + "</button>" +
+        '<button type="button" class="chip" data-sk="more" data-id="' + m.id + '">⋯</button></div></div>';
+    }).join("");
+    if ((k.log || []).length) h += '<div class="lbl">Oxirgi o\'zgarishlar</div><div class="card col" style="gap:4px;font-size:12px">' + k.log.map(function (r) { return '<div class="row" style="gap:8px"><span class="muted" style="flex:none">' + fmtAgo(r.t) + "</span><span>" + esc(r.m) + "</span></div>"; }).join("") + "</div>";
+    return h;
+  }
+  /** Pastdan chiqadigan oyna */
+  function skSheet(html, onClick, onInput) {
+    var old = document.getElementById("ov"); if (old) old.remove();
+    var ov = document.createElement("div");
+    ov.id = "ov"; ov.className = "ov";
+    ov.innerHTML = '<div class="sheet" role="dialog" aria-modal="true">' + html + "</div>";
+    ov.addEventListener("click", function (e) {
+      if (e.target === ov) return ov.remove();
+      var b = e.target.closest("button"); if (!b || b.disabled) return;
+      if (b.dataset.close) return ov.remove();
+      onClick(b.dataset, b, ov);
+    });
+    if (onInput) ov.addEventListener("input", function (e) { onInput(e, ov); });
+    document.body.appendChild(ov);
+    return ov;
+  }
+  function skMaster(id) { return (S.sk && S.sk.items || []).filter(function (m) { return m.id === id; })[0]; }
+  function skQtySheet(m) {
+    var ov = skSheet('<div class="row" style="justify-content:space-between"><b style="font-size:16px">Qoldiq</b><button type="button" class="chip" data-close="1">Yopish</button></div>' +
+      '<div class="muted" style="font-size:13px">' + esc(m.name) + "</div>" +
+      '<input id="skn" type="number" inputmode="numeric" min="0" value="' + m.qty + '" style="width:100%;padding:14px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:24px;font-weight:800;text-align:center">' +
+      '<div class="row" style="gap:6px;flex-wrap:wrap;justify-content:center">' + [-10, -5, -1, 1, 5, 10, 20].map(function (n) { return '<button type="button" class="chip" data-d="' + n + '">' + (n > 0 ? "+" : "") + n + "</button>"; }).join("") + "</div>" +
+      '<button type="button" class="cta" data-save="1" style="min-height:50px">Saqlash va marketlarga yozish</button>',
+      function (d, b, ov2) {
+        var inp = ov2.querySelector("#skn");
+        if (d.d) { inp.value = Math.max(0, (Number(inp.value) || 0) + Number(d.d)); return; }
+        if (d.save) { b.disabled = true; ov2.remove(); skAct({ act: "set", id: m.id, n: Number(inp.value) || 0 }); }
+      });
+    setTimeout(function () { var i = ov.querySelector("#skn"); if (i) i.select(); }, 50);
+  }
+  function skPicker(m, mp) {
+    var st = { mp: mp || "", q: "", list: null };
+    function body() {
+      return '<div class="row" style="justify-content:space-between"><b style="font-size:16px">' + (m ? "🔗 Bog'lash" : "➕ Mahsulot qo'shish") + '</b><button type="button" class="chip" data-close="1">Yopish</button></div>' +
+        (m ? '<div class="muted" style="font-size:13px">' + esc(m.name) + "</div>" : '<div class="muted" style="font-size:13px">Kartochkani tanlang — mahsulot shu nom va qoldiq bilan yaratiladi</div>') +
+        '<div class="seg" style="grid-template-columns:repeat(4,minmax(0,1fr))">' + [["", "Hammasi"], ["uz", "Uzum"], ["oz", "Ozon"], ["wb", "WB"]].map(function (x) { return '<button type="button" data-pmp="' + x[0] + '" class="' + (st.mp === x[0] ? "on" : "") + '">' + x[1] + "</button>"; }).join("") + "</div>" +
+        '<input id="skpq" placeholder="Nomi yoki artikul bo\'yicha qidirish" value="' + esc(st.q) + '" style="width:100%;padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:15px">' +
+        '<div id="skpl" class="col" style="gap:6px">' + listHtml() + "</div>";
+    }
+    function listHtml() {
+      if (!st.list) return '<div class="skel"></div>';
+      if (!st.list.length) return '<div class="empty">Bog\'lanmagan kartochka topilmadi</div>';
+      return st.list.map(function (l) {
+        return '<button type="button" data-pk="' + esc(l.k) + '" class="card" style="display:flex;gap:10px;align-items:center;text-align:left;width:100%;padding:10px;border:1px solid ' + (l.s >= 60 ? "var(--acc)" : "var(--line)") + '">' +
+          (l.img ? '<img src="' + esc(l.img) + '" alt="" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex:none">' : "") +
+          '<span class="grow" style="min-width:0"><span style="display:block">' + mpBadge(l.mp, l.shop) + (l.s >= 60 ? ' <span style="font-size:11px;color:var(--acc-ink);font-weight:700">mos ' + l.s + "%</span>" : "") + "</span>" +
+          '<span style="display:block;font-size:13px;line-height:1.3;margin-top:3px">' + esc(l.title) + '</span><small class="muted">' + esc(l.code) + "</small></span><b>" + (l.qty == null ? "—" : l.qty) + "</b></button>";
+      }).join("");
+    }
+    var qT2;
+    function load(ov) {
+      api("stock/cand?" + new URLSearchParams({ id: m ? m.id : "", q: st.q, mp: st.mp }).toString()).then(function (j) { st.list = j.list; var el = ov.querySelector("#skpl"); if (el) el.innerHTML = listHtml(); }).catch(function (e) { toast(e.message); });
+    }
+    var ov = skSheet(body(), function (d, b, ov2) {
+      if (d.pmp != null) { st.mp = d.pmp; st.list = null; ov2.querySelector(".sheet").innerHTML = body(); return load(ov2); }
+      if (d.pk) {
+        b.disabled = true; ov2.remove();
+        if (m) skAct({ act: "link", id: m.id, k: d.pk });
+        else skAct({ act: "create", k: d.pk });
+      }
+    }, function (e, ov2) {
+      if (e.target.id !== "skpq") return;
+      st.q = e.target.value;
+      clearTimeout(qT2);
+      qT2 = setTimeout(function () { load(ov2); }, 300);
+    });
+    load(ov);
+  }
+  function skMore(m) {
+    skSheet('<div class="row" style="justify-content:space-between"><b style="font-size:16px">' + esc(m.name) + '</b><button type="button" class="chip" data-close="1">Yopish</button></div>' +
+      '<input id="skname" value="' + esc(m.name) + '" style="width:100%;padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:15px">' +
+      '<button type="button" class="btn" data-m="rename">✏️ Nomini saqlash</button>' +
+      '<button type="button" class="btn" data-m="onoff">' + (m.on ? "⏸ Bu mahsulotni sinxronlamaslik" : "▶️ Sinxronlashni yoqish") + "</button>" +
+      '<button type="button" class="btn" data-m="del" style="color:var(--red)">🗑 O\'chirish (marketlardagi qoldiq o\'zgarmaydi)</button>',
+      function (d, b, ov2) {
+        if (d.m === "rename") { ov2.remove(); return skAct({ act: "rename", id: m.id, name: ov2.querySelector("#skname").value }); }
+        if (d.m === "onoff") { ov2.remove(); return skAct({ act: "onoff", id: m.id }); }
+        if (d.m === "del") { ov2.remove(); return confirmBox("Mahsulot ro'yxatdan o'chirilsinmi?").then(function (ok) { if (ok) skAct({ act: "del", id: m.id }); }); }
+      });
+  }
+  function stockClick(d, b) {
+    if (!d.sk) return false;
+    var m = d.id ? skMaster(d.id) : null;
+    if (d.sk === "toggle") {
+      var on = S.sk && S.sk.conf.on;
+      confirmBox(on ? "Sinxronlash to'xtatilsinmi?" : "Sinxronlash yoqilsinmi? Bog'langan hamma kartochkalarda FBS qoldig'i shu yerdagi songa o'zgartiriladi.").then(function (ok) { if (ok) { b.disabled = true; skAct({ act: "toggle" }); } });
+      return true;
+    }
+    if (d.sk === "sync") { b.disabled = true; skAct({ act: "sync" }); return true; }
+    if (d.sk === "bulk") {
+      confirmBox("Uzum'dagi FBS qoldig'i bor, hali bog'lanmagan hamma kartochkadan mahsulot yaratilsinmi?").then(function (ok) { if (ok) { b.disabled = true; skAct({ act: "bulk" }); } });
+      return true;
+    }
+    if (d.sk === "new") { skPicker(null, "uz"); return true; }
+    if (!m) return true;
+    if (d.sk === "qty") { skQtySheet(m); return true; }
+    if (d.sk === "add") { b.disabled = true; skAct({ act: "add", id: m.id, n: Number(d.n) }); return true; }
+    if (d.sk === "link") {
+      var miss = ["oz", "wb", "uz"].filter(function (mp) { return !m.links.some(function (l) { return l.mp === mp; }); });
+      skPicker(m, miss[0] || "");
+      return true;
+    }
+    if (d.sk === "unlink") { confirmBox("Kartochka bu mahsulotdan uzilsinmi?").then(function (ok) { if (ok) skAct({ act: "unlink", id: m.id, k: d.k }); }); return true; }
+    if (d.sk === "more") { skMore(m); return true; }
+    return true;
+  }
   function render() {
     var navEl = document.querySelector("nav");
     if (S.me && S.me.needReg) { navEl.style.display = "none"; M.innerHTML = vHelp(); return; }
     navEl.style.display = "";
     renderNav();
-    var f = { home: vHome, "new": vNew, tasks: vTasks, orders: vOrders, profile: vProfile, help: vHelp, shop: vShop, admin: vAdmin, ntf: vNtf, stats: vStats }[S.tab];
+    var f = { home: vHome, "new": vNew, tasks: vTasks, orders: vOrders, profile: vProfile, help: vHelp, shop: vShop, admin: vAdmin, ntf: vNtf, stats: vStats, stock: vStock }[S.tab];
     M.innerHTML = S.me ? f() : S.err ? '<div class="empty">' + esc(S.err) + '<br><br><button type="button" class="btn dark" data-act="retry">Qayta urinish</button></div>' : '<div class="skel"></div><div class="skel"></div>';
   }
 
@@ -442,6 +608,7 @@ var qrcode=function(){var P=function(x,w){var g=236,l=17,n=x,s=O[w],t=null,r=0,h
     h += '<div class="col"><div class="lbl">Tezkor amallar</div>' +
       '<button type="button" class="link" data-go="new"><span class="ic">' + ic("cal") + '</span><span class="grow"><b>FBO slot qidirish</b><small>Nakladnoy uchun yaqin 7 kun</small></span>' + ic("chev", 18) + "</button>" +
       '<button type="button" class="link" data-go="stats"><span class="ic">' + ic("chart") + '</span><span class="grow"><b>Statistika</b><small>Buyurtmalar, summa, eng ko\'p sotilganlar</small></span>' + ic("chev", 18) + "</button>" +
+      (me.owner ? '<button type="button" class="link" data-go="stock"><span class="ic">' + ic("box") + '</span><span class="grow"><b>🏬 FBS ombor</b><small>Bitta qoldiq — Uzum, Ozon va WB\'da bir xil</small></span>' + ic("chev", 18) + "</button>" : "") +
       '<button type="button" class="link" data-kind2="fbs"><span class="ic amb">' + ic("pin") + '</span><span class="grow"><b>FBS topshirish joyi</b><small>Viloyat → tuman → punkt · bo\'lib topshirish</small></span>' + ic("chev", 18) + "</button>" +
       (!me.staff && !(me.mp.oz || me.mp.wb) ? '<button type="button" class="link" data-go="profile"><span class="ic">' + ic("link") + '</span><span class="grow"><b>Ozon / WB ulash</b><small>FBS buyurtmalar shu ilovada ko\'rinadi</small></span>' + ic("chev", 18) + "</button>" : "") +
       "</div>";
@@ -1489,6 +1656,12 @@ var qrcode=function(){var P=function(x,w){var g=236,l=17,n=x,s=O[w],t=null,r=0,h
   /* ---------- Tugmalar ---------- */
   var qT;
   M.addEventListener("input", function (e) {
+    if (e.target.id === "skq") {
+      S.skQ = e.target.value;
+      clearTimeout(qT);
+      qT = setTimeout(function () { var pos = e.target.selectionStart; render(); var el = document.getElementById("skq"); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (x) {} } }, 250);
+      return;
+    }
     if (e.target.id === "aq") {
       S.admQ = e.target.value;
       clearTimeout(qT);
@@ -1513,6 +1686,7 @@ var qrcode=function(){var P=function(x,w){var g=236,l=17,n=x,s=O[w],t=null,r=0,h
     if (d.nkind) { S.nw.kind = d.nkind; S.nw.inv = null; if (S.nw.shop) pickShop(S.nw.shop); else render(); return; }
     if (d.kind2) { S.kind = "fbs"; F.step = "orders"; return go("new"); }
     if (fbsClick(d, b)) return;
+    if (stockClick(d, b)) return;
     if (d.go) { if (d.tt) S.tasksTab = d.tt; return go(d.go); }
     if (d.shop) return pickShop(Number(d.shop));
     if (d.inv) return pickInv(Number(d.inv));
