@@ -6,7 +6,7 @@ import { fmtTime, itemsLine, MP_ICON, MP_NAME, orderText, statusUz, widgetData }
 import { ORDER_WIDGET_HTML } from "./widget";
 import { getStats, yesterdayReport } from "./stats";
 import { ozonActPdf, ozonCancel, ozonEnabled, ozonGet, ozonHandover, ozonLabel, ozonShip, ozonUnfulfilled } from "./ozon";
-import { wbCancel, wbEnabled, wbLabel, wbLabels, wbNew, wbShip, wbSupplyQr, wbTodaySupply, wbHandover } from "./wb";
+import { wbCancel, wbEnabled, wbLabel, wbLabels, wbNew, wbActive, wbShip, wbSupplyQr, wbTodaySupply, wbHandover } from "./wb";
 import { cancelConfirmKeyboard, cancelReasonKeyboard, cardKeyboard, cardText, handConfirmKeyboard, stageOf } from "./card";
 
 const ORDER_TTL = 30 * 86400;
@@ -232,6 +232,12 @@ export async function pendingOrders(env: Env): Promise<{ all: Order[]; errs: str
   if (wbEnabled(env)) {
     try {
       const w = await wbNew(env);
+      try {
+        const seen = new Set(w.map((x) => x.id));
+        for (const x of await wbActive(env)) if (!seen.has(x.id)) w.push(x);
+      } catch (e) {
+        errs.push("WB (yig'ishdagilar): " + (e as Error).message);
+      }
       wb = w.length;
       all.push(...w);
     } catch (e) {

@@ -65,6 +65,37 @@ export async function wbNew(env: Env): Promise<Order[]> {
   return (r.orders ?? []).map(toOrder);
 }
 
+/**
+ * Yig'ishdagi (confirm) va topshirilib, WB qabulini kutayotgan (complete + waiting) buyurtmalar.
+ * Oxirgi 14 kunlik buyurtmalar ro'yxatidan olinadi, holati /orders/status orqali aniqlanadi.
+ */
+export async function wbActive(env: Env): Promise<Order[]> {
+  const dateFrom = Math.floor(Date.now() / 1000) - 14 * 86400;
+  const all: any[] = [];
+  let next = 0;
+  for (let i = 0; i < 10; i++) {
+    const r = await wb(env, `/api/v3/orders?limit=1000&next=${next}&dateFrom=${dateFrom}`);
+    const list: any[] = r.orders ?? [];
+    all.push(...list);
+    if (list.length < 1000 || !r.next) break;
+    next = r.next;
+  }
+  if (!all.length) return [];
+  const st = new Map<number, { s: string; w: string }>();
+  for (let i = 0; i < all.length; i += 1000) {
+    const r = await wb(env, "/api/v3/orders/status", { method: "POST", body: JSON.stringify({ orders: all.slice(i, i + 1000).map((o) => o.id) }) });
+    for (const x of r.orders ?? []) st.set(Number(x.id), { s: String(x.supplierStatus ?? ""), w: String(x.wbStatus ?? "") });
+  }
+  const out: Order[] = [];
+  for (const o of all) {
+    const x = st.get(Number(o.id));
+    if (!x) continue;
+    if (x.s === "confirm") out.push({ ...toOrder(o), status: "confirm", canShip: false });
+    else if (x.s === "complete" && x.w === "waiting") out.push({ ...toOrder(o), status: "handed", canShip: false });
+  }
+  return out;
+}
+
 /** "Yig'ishga olish": bugungi postavkaga qo'shadi (new -> confirm) */
 export async function wbShip(env: Env, orderId: string): Promise<string> {
   const today = new Date().toISOString().slice(0, 10);
