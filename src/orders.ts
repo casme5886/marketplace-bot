@@ -186,7 +186,7 @@ function summaryText(env: Env, pending: Order[], fresh: Set<string>): string {
   for (const o of pending) total.set(o.currency, (total.get(o.currency) ?? 0) + o.price);
   const lines = pending.slice(0, 25).map((o) => {
     const isNew = fresh.has(`${o.mp}:${o.id}`) ? "🆕 " : "";
-    return `${isNew}${MP_ICON[o.mp]} <b>${MP_NAME[o.mp]}</b> · № <code>${escapeHtml(o.id)}</code> · ${fmtTime(env, o.createdAt)}\n📦 ${escapeHtml(itemsLine(o))}\n💰 ${fmtMoney(o.price, o.currency)} · 📍 ${escapeHtml(o.city)}`;
+    return `${isNew}${MP_ICON[o.mp]} <b>${MP_NAME[o.mp]}</b> · № <code>${escapeHtml(o.id)}</code> · ${fmtTime(env, o.createdAt)}\n📦 ${escapeHtml(itemsLine(o))}\n💰 ${fmtMoney(o.price, o.currency)} · 📍 ${escapeHtml(o.city)}${o.deadline ? `\n⏰ Topshirish: ${fmtTime(env, o.deadline)} gacha` : ""}`;
   });
   if (pending.length > 25) lines.push(`… yana ${pending.length - 25} ta`);
   const sum = [...total].map(([c, v]) => fmtMoney(v, c)).join(" + ");
