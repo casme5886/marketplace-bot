@@ -144,7 +144,7 @@ export async function clientHome(env: Env, uid: number, note = ""): Promise<CScr
     rows.push([{ text: "🔗 Ozon / WB ulash", callback_data: "c:mp" }]);
   }
   const appUrl = await env.STATE.get("app:url");
-  if (appUrl) rows.unshift([{ text: "📱 Ilovani ochish", web_app: { url: appUrl } } as unknown as Btn]);
+  if (appUrl) rows.unshift([{ text: "📱 Ilovani ochish", style: "success", web_app: { url: appUrl } } as unknown as Btn]);
   rows.push([{ text: "🔐 Faqat MarketHub xodimlari uchun", callback_data: "c:staff" }]);
   return { text: L.join("\n"), reply_markup: { inline_keyboard: rows } };
 }

@@ -89,7 +89,7 @@ async function appHome(env: Env, chatId: number): Promise<boolean> {
   const prev = Number(await env.STATE.get(`apph:${chatId}`));
   if (prev) await tg(env, "deleteMessage", { chat_id: chatId, message_id: prev }).catch(() => {});
   const lang = await getLang(env, chatId);
-  const r = await sendText(env, chatId, bt(lang, "home"), { reply_markup: { inline_keyboard: [[{ text: bt(lang, "openApp"), web_app: { url } } as any]] } });
+  const r = await sendText(env, chatId, bt(lang, "home"), { reply_markup: { inline_keyboard: [[{ text: bt(lang, "openApp"), style: "success", web_app: { url } } as any]] } });
   await env.STATE.put(`apph:${chatId}`, String(r.message_id));
   return true;
 }
