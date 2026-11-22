@@ -55,7 +55,7 @@ export default {
       return botStub(env).fetch(new Request("https://bot/webhook", { method: "POST", body: await req.text() }));
     }
     // Bir martalik sozlash va ma'lumot ko'chirish: ?key=SETUP_KEY
-    if (url.pathname === "/setup" || url.pathname === "/import") {
+    if (url.pathname === "/setup" || url.pathname === "/import" || url.pathname === "/export" || url.pathname === "/shutdown") {
       if (!env.SETUP_KEY || url.searchParams.get("key") !== env.SETUP_KEY) return new Response("Forbidden", { status: 403 });
       return botStub(env).fetch(
         new Request(`https://bot${url.pathname}`, { method: req.method, headers: { "x-origin": url.origin }, body: req.method === "POST" ? await req.text() : undefined }),

@@ -66,6 +66,7 @@ export class BotDO {
   }
 
   private async ensureAlarm() {
+    if (await this.kv.get("cloud:off")) return;
     const a = await this.ctx.storage.getAlarm();
     if (!a || a < Date.now() - 60_000) await this.ctx.storage.setAlarm(Date.now() + TICK);
   }
@@ -102,11 +103,28 @@ export class BotDO {
       }
       return new Response(`✅ ${n} ta yozuv ko'chirildi`);
     }
-    if (url.pathname === "/tick") return new Response("ok");
+    if (url.pathname === "/export") {
+      // Serverga ko'chirish uchun: .local-kv.json bilan bir xil format { key: {v, m?, e?} }
+      const rows: any[] = this.ctx.storage.sql.exec("SELECT k, v, m, e FROM kv").toArray();
+      const out: Record<string, { v: string; m?: unknown; e?: number }> = {};
+      for (const r of rows) out[r.k] = { v: r.v, ...(r.m ? { m: JSON.parse(r.m) } : {}), ...(r.e ? { e: r.e } : {}) };
+      return new Response(JSON.stringify(out), { headers: { "content-type": "application/json" } });
+    }
+    if (url.pathname === "/shutdown") {
+      // Bot serverga ko'chdi: bulutdagi nusxa ishni to'xtatadi (alarm o'chadi, /tick ham uyg'otmaydi)
+      await this.kv.put("cloud:off", "1");
+      await this.ctx.storage.deleteAlarm();
+      return new Response("⏹ Bulutdagi bot to'xtatildi");
+    }
+    if (url.pathname === "/tick") {
+      if (await this.kv.get("cloud:off")) return new Response("off");
+      return new Response("ok");
+    }
     return new Response("MarketHub bot ishlayapti ✅ (Cloudflare)");
   }
 
   async alarm() {
+    if (await this.kv.get("cloud:off")) return;
     try {
       await this.tick();
     } finally {
