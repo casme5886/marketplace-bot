@@ -2,7 +2,7 @@ import type { Env, Marketplace, Order, StoredOrder } from "./types";
 import { appMarkup, logNtf } from "./notify";
 import { listAuthorizedChats } from "./auth";
 import { escapeHtml, sendDocument, sendText, tg, TgError } from "./telegram";
-import { fmtTime, itemsLine, MP_ICON, MP_NAME, orderText, statusUz, widgetData } from "./format";
+import { fmtMoney, fmtTime, itemsLine, MP_ICON, MP_NAME, orderText, statusUz, widgetData } from "./format";
 import { ORDER_WIDGET_HTML } from "./widget";
 import { getStats, yesterdayReport } from "./stats";
 import { ozonActPdf, ozonCancel, ozonEnabled, ozonGet, ozonHandover, ozonLabel, ozonShip, ozonUnfulfilled } from "./ozon";
@@ -116,22 +116,19 @@ export async function pollAll(env: Env): Promise<{ newCount: number; errors: str
     }
   }
 
+  const fetchOk = errors.length === 0; // marketpleysdan ro'yxat to'liq olinmasa — jamlangan xabarga tegmaymiz
   const chats = await listAuthorizedChats(env);
   const now = Date.now();
   const remindMs = Number(env.REMIND_BEFORE_HOURS ?? "3") * 3600e3;
   let newCount = 0;
+  const fresh = new Set<string>();
 
   for (const o of orders) {
     let so = await loadOrder(env, o.mp, o.id);
     if (!so) {
+      // Alohida xabar yubormaymiz — pastda hammasi bitta jamlangan xabarga yig'iladi
       so = { order: o, chatMessages: [] };
-      for (const chatId of chats) {
-        try {
-          so.chatMessages.push(await sendOrderCard(env, chatId, o));
-        } catch (e) {
-          errors.push(`send ${chatId}: ${(e as Error).message}`);
-        }
-      }
+      fresh.add(`${o.mp}:${o.id}`);
       newCount++;
       await saveOrder(env, so);
       continue;
@@ -171,8 +168,77 @@ export async function pollAll(env: Env): Promise<{ newCount: number; errors: str
     if (changed) await saveOrder(env, so);
   }
 
+  if (fetchOk || fresh.size) try {
+    await syncNewSummary(env, chats, orders.filter((o) => o.canShip), fresh);
+  } catch (e) {
+    errors.push("summary: " + (e as Error).message);
+  }
+
   if (errors.length) console.log("poll errors", errors);
   return { newCount, errors };
+}
+
+const SUM_KEY = "newsum";
+
+function summaryText(env: Env, pending: Order[], fresh: Set<string>): string {
+  if (!pending.length) return "✅ <b>Barcha yangi buyurtmalar yig'ishga olindi</b>";
+  const total = new Map<string, number>();
+  for (const o of pending) total.set(o.currency, (total.get(o.currency) ?? 0) + o.price);
+  const lines = pending.slice(0, 25).map((o) => {
+    const isNew = fresh.has(`${o.mp}:${o.id}`) ? "🆕 " : "";
+    return `${isNew}${MP_ICON[o.mp]} <b>${MP_NAME[o.mp]}</b> · № <code>${escapeHtml(o.id)}</code> · ${fmtTime(env, o.createdAt)}\n📦 ${escapeHtml(itemsLine(o))}\n💰 ${fmtMoney(o.price, o.currency)} · 📍 ${escapeHtml(o.city)}`;
+  });
+  if (pending.length > 25) lines.push(`… yana ${pending.length - 25} ta`);
+  const sum = [...total].map(([c, v]) => fmtMoney(v, c)).join(" + ");
+  return `🆕 <b>Yig'ishga olinmagan buyurtmalar: ${pending.length} ta</b>\n\n${lines.join("\n\n")}\n\n💰 Jami: <b>${sum}</b>\n👉 Qabul qilib, yig'ishga oling`;
+}
+
+/**
+ * Yangi buyurtmalar uchun bitta jamlangan xabar.
+ * Yangi buyurtma kelsa — eski xabar o'chiriladi va yig'ishga olinmagan barcha buyurtmalar bilan yangisi yuboriladi.
+ * Buyurtma yig'ishga olinsa — mavjud xabar tahrirlanadi.
+ */
+async function syncNewSummary(env: Env, chats: number[], pending: Order[], fresh: Set<string>) {
+  pending.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const ids = pending.map((o) => `${o.mp}:${o.id}`).join(",");
+  const prev = JSON.parse((await env.STATE.get(SUM_KEY)) ?? "{}") as { ids?: string; msgs?: Record<string, number> };
+  if (!fresh.size && prev.ids === ids) return;
+  const text = summaryText(env, pending, fresh);
+  const appMode = !!(await env.STATE.get("app:url"));
+  const kb = appMode
+    ? await appMarkup(env, null, "orders")
+    : { inline_keyboard: pending.slice(0, 8).map((o) => [{ text: `✅ ${MP_ICON[o.mp]} № ${o.id} — yig'ishga olish`, callback_data: `a:ship:${o.mp}:${o.id}` }]) };
+  const msgs: Record<string, number> = {};
+  for (const chatId of chats) {
+    const old = prev.msgs?.[String(chatId)];
+    try {
+      if (fresh.size || !old) {
+        if (!pending.length) continue;
+        if (old) await tg(env, "deleteMessage", { chat_id: chatId, message_id: old }).catch(() => {});
+        // Eski usulda yuborilgan alohida kartochkalarni ham olib tashlaymiz
+        for (const o of pending) {
+          const so = await loadOrder(env, o.mp, o.id);
+          const mine = so?.chatMessages.filter((m) => m.chatId === chatId) ?? [];
+          if (!so || !mine.length) continue;
+          for (const m of mine) await tg(env, "deleteMessage", { chat_id: chatId, message_id: m.messageId }).catch(() => {});
+          so.chatMessages = so.chatMessages.filter((m) => m.chatId !== chatId);
+          await saveOrder(env, so);
+        }
+        const m = await sendText(env, chatId, text, { reply_markup: kb });
+        msgs[String(chatId)] = m.message_id;
+      } else {
+        await tg(env, "editMessageText", { chat_id: chatId, message_id: old, text, parse_mode: "HTML", reply_markup: pending.length ? kb : undefined }).catch((e) => {
+          if (!(e instanceof TgError && /not modified/i.test(e.description))) throw e;
+        });
+        msgs[String(chatId)] = old;
+      }
+    } catch (e) {
+      console.log("summary", chatId, (e as Error).message);
+      if (old) msgs[String(chatId)] = old;
+    }
+  }
+  if (fresh.size) await logNtf(env, chats[0] ?? 0, text.replace(/<[^>]+>/g, ""), "orders").catch(() => {});
+  await env.STATE.put(SUM_KEY, JSON.stringify({ ids, msgs: pending.length ? msgs : {} }));
 }
 
 /** Tugma bosilganda: "ship" yoki "label" */
